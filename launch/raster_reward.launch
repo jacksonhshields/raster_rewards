@@ -1,0 +1,8 @@
+<launch>
+    <arg name="reward_raster_path" default="/home/auv/data/remote-sensing/tasmania/Tasmania200810/TAFI_provided_data/BathymetryAsTiffs/fort1.tif"/>
+
+    <node name="reward_raster" type="raster_reward.py" pkg="raster_rewards" output="screen">
+        <param name="reward_raster_path" value="$(arg reward_raster_path)"/>
+    </node>
+
+</launch>

@@ -10,6 +10,7 @@ project(raster_rewards)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -56,7 +57,6 @@ find_package(catkin REQUIRED COMPONENTS
  add_service_files(
    FILES
    RasterPointReward.srv
-   RasterPathReward.srv
 )
 
 ## Generate actions in the 'action' folder

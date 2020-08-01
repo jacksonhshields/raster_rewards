@@ -2,14 +2,34 @@
 
 
 import numpy as np
-from habitat_modelling.utils.raster_utils import extract_geotransform, get_pixels_from_lla, get_pixels_from_lla
+import rospy
 import shapely
+import shapely.geometry
 import utm
+import warnings
+from raster_rewards.srv import RasterPointReward, RasterPointRewardResponse
+from osgeo import osr
+from affine import Affine
+import pymap3d
 
+try:
+    from osgeo import gdal
+except ImportError:
+    import gdal
+
+def retrieve_pixel_coords(geo_coord,geot_params):
+    x, y = geo_coord[0], geo_coord[1]
+    forward_transform =  Affine.from_gdal(*geot_params)
+    reverse_transform = ~forward_transform
+    px, py = reverse_transform * (x, y)
+    px = np.around(px).astype(int)
+    py = np.around(py).astype(int)
+    pixel_coord = px, py
+    return pixel_coord
 
 class RewardMap:
     def __init__(self, raster_path):
-        self.reward_raster, _, _ = extract_geotransform(raster_path)
+        self.reward_raster = gdal.Open(raster_path)
         self.geotransform = self.reward_raster.GetGeoTransform()
         self.projection = self.reward_raster.GetProjection()
 
@@ -150,45 +170,20 @@ class RewardMap:
     def get_vector_reward(self, point):
         pass
 
-    def show(self):
-        plt.imshow(self.reward_raster.GetRasterBand(1).ReadAsArray(), cmap="jet")
-
-    def create_plot_map(self, fig=None, ax=None):
-        inproj = osr.SpatialReference()
-        inproj.ImportFromWkt(self.projection)
-        projcs = inproj.GetAuthorityCode('PROJCS')
-        projection_ccrs = ccrs.epsg(projcs)
-        subplot_kw = dict(projection=projection_ccrs)
-
-        if fig is None and ax is None:
-            fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=subplot_kw)
-            ax.set_title('Reward Map', fontsize=14)
-        elif (fig is None and ax is not None) or (fig is not None and ax is None):
-            warnings.warn("Either specify fig and ax or neither, overwriting given fig/ax")
-            fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=subplot_kw)
-            ax.set_title('Reward Map', fontsize=14)
-
-        extent = (self.geotransform[0], self.geotransform[0] + self.reward_raster.RasterXSize * self.geotransform[1],
-                  self.geotransform[3] + self.reward_raster.RasterYSize * self.geotransform[5], self.geotransform[3])
-
-        ax.imshow(self.reward_raster.GetRasterBand(1).ReadAsArray(), extent=extent,
-                        origin='upper', cmap="viridis")
-
-        return fig, ax
-
 class RewardNode:
     def __init__(self):
-        self.reward_raster_path = rospy.get_param("reward_raster_path", "")
+        self.reward_raster_path = rospy.get_param("~reward_raster_path", "")
+        print("Raster reward path", self.reward_raster_path)
         self.reward_map = RewardMap(self.reward_raster_path)
         
         self.reward_service = rospy.Service('get_reward', RasterPointReward, self.rewardServiceCallback)
     
-    def self.rewardServiceCallback(self, req):
+    def rewardServiceCallback(self, req):
         point = np.array([req.latitude, req.longitude])
         
         res = RasterPointRewardResponse()
-        geopoint = reward_map.llh_to_geo(point=point)
-        res.reward = reward_map.get_point_reward(point=geopoint, geo=True)
+        geopoint = self.reward_map.llh_to_geo(point=point)
+        res.reward = self.reward_map.get_point_reward(point=geopoint, geo=True)
         
         return res
 
