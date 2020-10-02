@@ -27,15 +27,15 @@ Source workspace:
 source /path/to/workspace/devel/setup.bash
 ```
 
-Start the server:
+Start the server, giving the location to the reward tif:
 ```bash
-roslaunch raster_rewards raster_reward.launch
+roslaunch raster_rewards raster_reward.launch reward_raster_path:=/path/to/reward_raster.tif
 ```
 
 Get the reward for a point (after sourcing the workspace):
 ```bash
 lon=148.00863
 lat=-43.07754
-rosservice call /get_reward "latitude: $lat
+rosservice call /get_point_value "latitude: $lat
 longitude: $lon"
 ```

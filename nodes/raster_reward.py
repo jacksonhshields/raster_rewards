@@ -19,6 +19,16 @@ except ImportError:
     import gdal
 
 def retrieve_pixel_coords(geo_coord,geot_params):
+    """
+    Gets the pixel coordinates for a given coordinate.
+    Args:
+        geo_coord: (np.ndarray) The coordianates
+        geot_params: (list) The geotransform parameters. (from gdal.GetGeotransform())
+
+    Returns:
+        np.ndarray: The pixel coordinates of the raster corresponding to the given coordinate.
+
+    """
     x, y = geo_coord[0], geo_coord[1]
     forward_transform =  Affine.from_gdal(*geot_params)
     reverse_transform = ~forward_transform
@@ -29,21 +39,32 @@ def retrieve_pixel_coords(geo_coord,geot_params):
     return pixel_coord
 
 class RewardMap:
+    """
+    Reward Map function is used to get rewards from a raster file.
+    """
     def __init__(self, raster_path):
+        """
+        Loads the raster file.
+
+        Args:
+            raster_path: (str) The path to the raster file.
+        """
+        # Load the raster
         self.reward_raster = gdal.Open(raster_path)
         self.geotransform = self.reward_raster.GetGeoTransform()
         self.projection = self.reward_raster.GetProjection()
-
+        # Whether to use UTM. If not, assumes lat,lon projection.
         self.use_utm = True if 'UTM' in self.projection else False
-
+        # Sets the origin of the map. This is useful if you are using local coordinates.
         self.origin = [self.geotransform[0], # minimum x value
                        self.geotransform[3] + self.reward_raster.RasterYSize * self.geotransform[5]]  # max y value + num_y_pixels * pixel_height
 
-
+        # Sets the bounds of the map
         self.bounds_geo = shapely.geometry.box(self.origin[0],  # Minimum x value
                                                self.origin[1],  # Minimum y vale
                                                self.origin[0] + self.reward_raster.RasterXSize*self.geotransform[1],  # Max x value = origin + num_x_pixels * pixel_width
                                                self.geotransform[3])  # Max y value
+        # Sets the local bounds
         if self.use_utm:
             self.bounds_local = shapely.geometry.box(0.0,  # Bounds local starts at 0,0
                                                      0.0,  # Bounds local starts at 0,0
@@ -128,33 +149,45 @@ class RewardMap:
         return ll
 
     def llh_to_geo(self, point):
+        """
+        Converts lat lon coordinate to geo. This can either be lat,lon (passthrough) or UTM.
+        Args:
+            point: (np.ndarray) The point to convert
+
+        Returns:
+            np.ndarray: The point in geo
+        """
         if self.use_utm:
-            srs = osr.SpatialReference(wkt=self.projection)
-            projcs = srs.GetAttrValue('projcs')
-            if 'zone' in projcs:
-                zonestr = projcs.split(' ')[-1]
-                zone_num = int(zonestr[:2])
-                zone_hem = zonestr[-1]
-                if zone_hem == "N":
-                    northern = True
-                elif zone_hem == "S":
-                    northern = False
-                else:
-                    raise ValueError("Zone hemisphere has to be either north or south")
-            else:
-                raise ValueError("Projection doesn't contain zone")
             xy = list(utm.from_latlon(point[0], point[1]))[:2]
             return np.array(xy)
         else:
             return point
 
     def get_bounds(self, geo):
+        """
+        Gets the bounds for the given array.
+
+        Args:
+            geo: (bool) Whether to use geo coordinates.
+
+        Returns:
+            tuple: Bounds in the form [minx,miny,maxx,maxy]
+        """
         if geo:
             return self.bounds_geo.bounds
         else:
             return self.bounds_local.bounds
 
     def get_point_reward(self, point, geo):
+        """
+        Gets the point reward for a given coordinate
+        Args:
+            point: (np.ndarray) The point to find the coordinates for. If geo coordinates, it must match the projection of the raster.
+            geo: (bool) Whether this point is in geo coordinates.
+
+        Returns:
+
+        """
         if geo:
             geo_point = point
         else:
@@ -169,30 +202,44 @@ class RewardMap:
         return reward
 
     def get_path_reward(self, path, sample_dist, geo):
-        # Convert the geo points to local. Necessary for when geo is lat,lon
-        local_points = []
-        for point in path:
-            if geo:
-                local_points.append(self.geo_to_local(point))
-            else:
-                local_points.append(point)
-        # Sample the path at a fixed spatial interval
-        path_sampled_local = []
-        leftover = 0.0
-        for n in range(len(local_points) -1):
-            pa = local_points[n]
-            pb = local_points[n+1]
-            ls = shapely.geometry.LineString([pa, pb])
-            travelled = leftover
-            while travelled < ls.length:
-                point = ls.project(travelled)
-                travelled += sample_dist
-                path_sampled_local.append(point)
-            leftover = ls.length - travelled
-        # Convert the local points back to geo
-        path_sampled = []
-        for point in path_sampled_local:
-            path_sampled.append(self.local_to_geo(point))
+        """
+        Gets the reward for a path.
+        Args:
+            path: (list[np.ndarray]) The path as a list of points.
+            sample_dist: (float) The interval along the path at which to sample. Pass in None to not subsample the path.
+            geo: (bool) Whether to use geo coordinates
+
+        Returns:
+            float: The accumulated reward for the given path
+        """
+
+        if sample_dist is None:  # Only use this if path is presampled.
+            path_sampled = path
+        else:
+            # Convert the geo points to local. Necessary for when geo is lat,lon
+            local_points = []
+            for point in path:
+                if geo:
+                    local_points.append(self.geo_to_local(point))
+                else:
+                    local_points.append(point)
+            # Sample the path at a fixed spatial interval
+            path_sampled_local = []
+            leftover = 0.0
+            for n in range(len(local_points) -1):
+                pa = local_points[n]
+                pb = local_points[n+1]
+                ls = shapely.geometry.LineString([pa, pb])
+                travelled = leftover
+                while travelled < ls.length:
+                    point = ls.project(travelled)
+                    travelled += sample_dist
+                    path_sampled_local.append(point)
+                leftover = ls.length - travelled
+            # Convert the local points back to geo
+            path_sampled = []
+            for point in path_sampled_local:
+                path_sampled.append(self.local_to_geo(point))
         # Get the rewards for the points
         rewards = []
         for point in path_sampled:
@@ -201,16 +248,29 @@ class RewardMap:
 
 
 class RewardNode:
+    """
+    A ROS node interface to the reward map.
+    """
     def __init__(self):
         self.reward_raster_path = rospy.get_param("~reward_raster_path", "")
         print("Raster reward path", self.reward_raster_path)
         self.reward_map = RewardMap(self.reward_raster_path)
         
-        self.reward_point_service = rospy.Service('get_point_reward', RasterPointReward, self.rewardPointServiceCallback)
-        self.reward_path_service = rospy.Service('get_path_reward', RasterPointReward, self.rewardPathServiceCallback)
+        self.reward_point_service = rospy.Service('get_point_value', RasterPointReward, self.rewardPointServiceCallback)
+        self.reward_path_service = rospy.Service('get_path_value', RasterPointReward, self.rewardPathServiceCallback)
 
     
     def rewardPointServiceCallback(self, req):
+        """
+        Gets the point reward for the requested point
+
+        Args:
+            req: (RasterPointReward) The request containing coordinates.
+
+        Returns:
+            RasterPointRewardResponse: The response containing the reward.
+
+        """
         point = np.array([req.point.latitude, req.point.longitude])
         
         res = RasterPointRewardResponse()
@@ -220,7 +280,15 @@ class RewardNode:
         return res
 
     def rewardPathServiceCallback(self, req):
-        # TODO do sample along the path
+        """
+        Gets the reward for a given path
+        Args:
+            req: (RasterPathReward) The request containing the path of coordinates to get a reward for.
+
+        Returns:
+            RasterPathRewardResponse: The response containing the reward.
+
+        """
         points = []
         for fix in req.path:
             point = np.array([fix.latitude, fix.longitude])
@@ -228,7 +296,7 @@ class RewardNode:
             geopoint = self.reward_map.llh_to_geo(point=point)
             points.append(geopoint)
         res = RasterPathRewardResponse()
-        res.reward = self.reward_map.get_path_reward(points, geo=True)
+        res.reward = self.reward_map.get_path_reward(points, sample_dist=req.sample_distance, geo=True)
         return res
 
 
