@@ -7,10 +7,11 @@ import shapely
 import shapely.geometry
 import utm
 import warnings
-from raster_rewards.srv import RasterPointReward, RasterPointRewardResponse
+from raster_rewards.srv import RasterPointReward, RasterPointRewardResponse, RasterPathReward, RasterPathRewardResponse
 from osgeo import osr
 from affine import Affine
 import pymap3d
+from sensor_msgs.msg import NavSatFix
 
 try:
     from osgeo import gdal
@@ -176,16 +177,34 @@ class RewardNode:
         print("Raster reward path", self.reward_raster_path)
         self.reward_map = RewardMap(self.reward_raster_path)
         
-        self.reward_service = rospy.Service('get_reward', RasterPointReward, self.rewardServiceCallback)
+        self.reward_point_service = rospy.Service('get_point_reward', RasterPointReward, self.rewardPointServiceCallback)
+        self.reward_path_service = rospy.Service('get_path_reward', RasterPointReward, self.rewardPathServiceCallback)
+
     
-    def rewardServiceCallback(self, req):
-        point = np.array([req.latitude, req.longitude])
+    def rewardPointServiceCallback(self, req):
+        point = np.array([req.point.latitude, req.point.longitude])
         
         res = RasterPointRewardResponse()
         geopoint = self.reward_map.llh_to_geo(point=point)
         res.reward = self.reward_map.get_point_reward(point=geopoint, geo=True)
         
         return res
+
+    def rewardPathServiceCallback(self, req):
+        # TODO do sample along the path
+        rewards = []
+        for fix in req.path:
+            point = np.array([fix.latitude, fix.longitude])
+
+            geopoint = self.reward_map.llh_to_geo(point=point)
+            rewards.append(self.reward_map.get_point_reward(point=geopoint, geo=True))
+        res = RasterPathRewardResponse()
+        res.reward = np.array(rewards).sum()
+        return res
+
+
+
+
 
 if __name__ == "__main__":
     rospy.init_node("reward_node")

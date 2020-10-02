@@ -1,0 +1,4 @@
+sensor_msgs/NavSatFix[] path
+float64 sample_distance
+---
+float64 reward

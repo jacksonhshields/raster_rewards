@@ -1,4 +1,3 @@
-float64 latitude
-float64 longitude
+sensor_msgs/NavSatFix point
 ---
 float64 reward
