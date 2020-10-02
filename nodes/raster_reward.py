@@ -168,8 +168,37 @@ class RewardMap:
         reward = self.reward_raster.GetRasterBand(1).ReadAsArray(int(px), int(py), 1, 1)
         return reward
 
-    def get_vector_reward(self, point):
-        pass
+    def get_path_reward(self, path, sample_dist, geo):
+        # Convert the geo points to local. Necessary for when geo is lat,lon
+        local_points = []
+        for point in path:
+            if geo:
+                local_points.append(self.geo_to_local(point))
+            else:
+                local_points.append(point)
+        # Sample the path at a fixed spatial interval
+        path_sampled_local = []
+        leftover = 0.0
+        for n in range(len(local_points) -1):
+            pa = local_points[n]
+            pb = local_points[n+1]
+            ls = shapely.geometry.LineString([pa, pb])
+            travelled = leftover
+            while travelled < ls.length:
+                point = ls.project(travelled)
+                travelled += sample_dist
+                path_sampled_local.append(point)
+            leftover = ls.length - travelled
+        # Convert the local points back to geo
+        path_sampled = []
+        for point in path_sampled_local:
+            path_sampled.append(self.local_to_geo(point))
+        # Get the rewards for the points
+        rewards = []
+        for point in path_sampled:
+            rewards.append(self.get_point_reward(point,geo=geo))
+        return np.sum(np.array(rewards))
+
 
 class RewardNode:
     def __init__(self):
@@ -192,17 +221,15 @@ class RewardNode:
 
     def rewardPathServiceCallback(self, req):
         # TODO do sample along the path
-        rewards = []
+        points = []
         for fix in req.path:
             point = np.array([fix.latitude, fix.longitude])
 
             geopoint = self.reward_map.llh_to_geo(point=point)
-            rewards.append(self.reward_map.get_point_reward(point=geopoint, geo=True))
+            points.append(geopoint)
         res = RasterPathRewardResponse()
-        res.reward = np.array(rewards).sum()
+        res.reward = self.reward_map.get_path_reward(points, geo=True)
         return res
-
-
 
 
 
