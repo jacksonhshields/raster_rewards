@@ -7,7 +7,7 @@ import shapely
 import shapely.geometry
 import utm
 import warnings
-from raster_rewards.srv import RasterPointReward, RasterPointRewardResponse, RasterPathReward, RasterPathRewardResponse
+from raster_rewards.srv import RasterPointReward, RasterPointRewardResponse, RasterPathReward, RasterPathRewardResponse, RasterExtent, RasterExtentResponse
 from osgeo import osr
 from affine import Affine
 import pymap3d
@@ -232,9 +232,9 @@ class RewardMap:
                 ls = shapely.geometry.LineString([pa, pb])
                 travelled = leftover
                 while travelled < ls.length:
-                    point = ls.project(travelled)
+                    point = ls.interpolate(travelled)
                     travelled += sample_dist
-                    path_sampled_local.append(point)
+                    path_sampled_local.append(np.array(point))
                 leftover = ls.length - travelled
             # Convert the local points back to geo
             path_sampled = []
@@ -257,7 +257,8 @@ class RewardNode:
         self.reward_map = RewardMap(self.reward_raster_path)
         
         self.reward_point_service = rospy.Service('get_point_value', RasterPointReward, self.rewardPointServiceCallback)
-        self.reward_path_service = rospy.Service('get_path_value', RasterPointReward, self.rewardPathServiceCallback)
+        self.reward_path_service = rospy.Service('get_path_value', RasterPathReward, self.rewardPathServiceCallback)
+        self.extent_path_service = rospy.Service('get_extent', RasterExtent, self.extentServiceCallback)
 
     
     def rewardPointServiceCallback(self, req):
@@ -299,6 +300,23 @@ class RewardNode:
         res.reward = self.reward_map.get_path_reward(points, sample_dist=req.sample_distance, geo=True)
         return res
 
+    def extentServiceCallback(self, req):
+        """
+        Gets the extent of the raster (used for bounds)
+        Args:
+            req: (RasterExtent) blank
+
+        Returns:
+            RasterExtentResponse: The response containing the xmin,ymin,xmax,ymax
+
+        """
+        bounds = self.reward_map.get_bounds(geo=True)
+        res = RasterExtentResponse()
+        res.xmin = bounds[0]
+        res.ymin = bounds[1]
+        res.xmax = bounds[2]
+        res.ymax = bounds[3]
+        return res
 
 
 if __name__ == "__main__":
