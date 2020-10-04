@@ -10,6 +10,7 @@ This package is designed to provide rewards for a given point or trajectory.
 - pymap3d (pip)
 - utm (pip)
 - affine (pip)
+- numpy (pip)
 
 
 ## Building
@@ -32,10 +33,7 @@ Start the server, giving the location to the reward tif:
 roslaunch raster_rewards raster_reward.launch reward_raster_path:=/path/to/reward_raster.tif
 ```
 
-Get the reward for a point (after sourcing the workspace):
+Use the demo to get the reward for the path:
 ```bash
-lon=148.00863
-lat=-43.07754
-rosservice call /get_point_value "latitude: $lat
-longitude: $lon"
+rosrun raster_rewards demo_client.py --csv /path/to/points.csv
 ```
