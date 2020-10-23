@@ -307,15 +307,18 @@ class RewardNode:
             req: (RasterExtent) blank
 
         Returns:
-            RasterExtentResponse: The response containing the xmin,ymin,xmax,ymax
+            RasterExtentResponse: The response containing the lon
 
         """
         bounds = self.reward_map.get_bounds(geo=True)
+        lat_min, lon_min = self.reward_map.geo_to_llh(np.array(bounds[0], bounds[1]))
+        lat_max, lon_max = self.reward_map.geo_to_llh(np.array(bounds[2], bounds[3]))
         res = RasterExtentResponse()
-        res.xmin = bounds[0]
-        res.ymin = bounds[1]
-        res.xmax = bounds[2]
-        res.ymax = bounds[3]
+        res.lat_min = lat_min
+        res.lon_min = lon_min
+        res.lat_max = lat_max
+        res.lon_max = lon_max
+
         return res
 
 

@@ -1,5 +1,5 @@
 ---
-float64 xmin
-float64 ymin
-float64 xmax
-float64 ymax
+float64 lat_min
+float64 lon_min
+float64 lat_max
+float64 lon_max
