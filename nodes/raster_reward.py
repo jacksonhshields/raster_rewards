@@ -311,8 +311,8 @@ class RewardNode:
 
         """
         bounds = self.reward_map.get_bounds(geo=True)
-        lat_min, lon_min = self.reward_map.geo_to_llh(np.array(bounds[0], bounds[1]))
-        lat_max, lon_max = self.reward_map.geo_to_llh(np.array(bounds[2], bounds[3]))
+        lat_min, lon_min = self.reward_map.geo_to_llh(np.array([bounds[0], bounds[1]]))
+        lat_max, lon_max = self.reward_map.geo_to_llh(np.array([bounds[2], bounds[3]]))
         res = RasterExtentResponse()
         res.lat_min = lat_min
         res.lon_min = lon_min
